@@ -20,18 +20,18 @@ RopeSegment :: struct {
 
 verlet_integrate :: proc(segment: ^RopeSegment, dt: f32) {
 	temp := segment.pos
-	velocity := rl.Vector2Subtract(segment.pos, segment.prev_pos)
-	velocity = rl.Vector2Scale(velocity, FRICTION)
-	segment.pos = rl.Vector2Add(segment.pos, velocity)
+	velocity := segment.pos - segment.prev_pos
+	velocity = velocity * FRICTION
+	segment.pos = segment.pos + velocity
 	segment.prev_pos = temp
 }
 
 constrain_segment :: proc(segment: ^RopeSegment, anchor: rl.Vector2, rest_length: f32) {
-	direction := rl.Vector2Subtract(segment.pos, anchor)
+	direction := segment.pos - anchor
 	distance := rl.Vector2Length(direction)
 	if distance > rest_length {
-		direction = rl.Vector2Scale(direction, rest_length / distance)
-		segment.pos = rl.Vector2Add(anchor, direction)
+		direction = direction * (rest_length / distance)
+		segment.pos = anchor + direction
 	}
 }
 
@@ -72,7 +72,7 @@ main :: proc() {
 
 			if direction.x != 0 || direction.y != 0 {
 				length := rl.Vector2Length(direction)
-				direction = rl.Vector2Scale(direction, PLAYER_SPEED / length)
+				direction = direction * (PLAYER_SPEED / length)
 			}
 
 			player_targ.x += direction.x
@@ -101,15 +101,12 @@ main :: proc() {
 			mouse_pos := rl.GetMousePosition()
 
 			// Calculate direction from ball to mouse
-			to_mouse := rl.Vector2Subtract(mouse_pos, ball_pos)
+			to_mouse := mouse_pos - ball_pos
 			distance := rl.Vector2Length(to_mouse)
 
 			// Update the end of the rope based on mouse position
 			if distance > 70 {
-				rope_end := rl.Vector2Add(
-					ball_pos,
-					rl.Vector2Scale(rl.Vector2Normalize(to_mouse), 70),
-				)
+				rope_end := ball_pos + rl.Vector2Normalize(to_mouse) * 70
 				tether_pos = rope_end
 			} else {
 				tether_pos = mouse_pos
