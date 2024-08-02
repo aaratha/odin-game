@@ -6,7 +6,12 @@ SCREEN_WIDTH :: 800
 SCREEN_HEIGHT :: 450
 PLAYER_SPEED :: 7
 PLAYER_LERP_FACTOR :: 6
+TETHER_LERP_FACTOR :: 6
 FRICTION :: 0.80 // Friction factor to reduce velocity
+BG_COLOR :: rl.BLACK
+FG_COLOR :: rl.WHITE
+PLAYER_COLOR :: rl.WHITE
+
 
 RopeSegment :: struct {
 	pos:      rl.Vector2,
@@ -36,14 +41,14 @@ main :: proc() {
 	defer rl.CloseWindow()
 
 	ball_pos := rl.Vector2{f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)}
-	ball_vel := rl.Vector2{5, 4}
 	ball_rad :: 15
-	ball_color :: rl.MAROON
+	ball_color :: PLAYER_COLOR
 	player_targ := rl.Vector2{f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)}
+	tether_pos := rl.Vector2{0, 0}
 
 	rope_length :: 15
 	anchor := rl.Vector2{f32(rl.GetScreenWidth() / 2), 50}
-	rest_length := 5
+	rest_length := 6
 	rope := make([]RopeSegment, rope_length)
 
 	for i in 0 ..= rope_length - 1 {
@@ -53,9 +58,6 @@ main :: proc() {
 	pause := true
 	framesCounter := 0
 	rl.SetTargetFPS(60)
-
-	mouseDist := 0
-	mouseDir := rl.Vector2(0)
 
 	for !rl.WindowShouldClose() {
 		if rl.IsKeyPressed(rl.KeyboardKey.SPACE) {
@@ -95,50 +97,53 @@ main :: proc() {
 				)
 			}
 
-			// Constrain first segment to the anchor point
-			constrain_segment(&rope[0], ball_pos, f32(rest_length))
-
+			// Handle mouse interaction
 			mouse_pos := rl.GetMousePosition()
-			mouse_dir := rl.Vector2Subtract(mouse_pos, rope[rope_length - 1].pos)
-			mouse_dist := rl.Vector2Length(mouse_dir)
 
-			// Update the last segment based on mouse distance
-			if mouse_dist < 70 {
-				rope[rope_length - 1].pos = mouse_pos
-			} else {
-				rope[rope_length - 1].pos = rl.Vector2Add(
-					rope[rope_length - 2].pos,
-					rl.Vector2Scale(mouse_dir, 0.2),
+			// Calculate direction from ball to mouse
+			to_mouse := rl.Vector2Subtract(mouse_pos, ball_pos)
+			distance := rl.Vector2Length(to_mouse)
+
+			// Update the end of the rope based on mouse position
+			if distance > 70 {
+				rope_end := rl.Vector2Add(
+					ball_pos,
+					rl.Vector2Scale(rl.Vector2Normalize(to_mouse), 70),
 				)
+				tether_pos = rope_end
+			} else {
+				tether_pos = mouse_pos
 			}
+
+			rope[rope_length - 1].pos +=
+				(tether_pos - rope[rope_length - 1].pos) / TETHER_LERP_FACTOR
 		} else {
 			framesCounter += 1
 		}
 
 		rl.BeginDrawing()
-
-		rl.ClearBackground(rl.RAYWHITE)
-		rl.DrawCircleV(ball_pos, ball_rad, ball_color)
+		rl.ClearBackground(BG_COLOR)
+		rl.DrawCircleV(ball_pos, ball_rad, PLAYER_COLOR)
 		rl.DrawText(
 			"PRESS SPACE to PAUSE BALL MOVEMENT",
 			10,
 			rl.GetScreenHeight() - 25,
 			20,
-			rl.LIGHTGRAY,
+			FG_COLOR,
 		)
 
 		// Draw rope
 		for i in 0 ..= rope_length - 2 {
-			rl.DrawLineV(rope[i].pos, rope[i + 1].pos, rl.DARKGRAY)
+			rl.DrawLineEx(rope[i].pos, rope[i + 1].pos, 3, PLAYER_COLOR)
 			if i == rope_length - 2 {
-				rl.DrawCircle(i32(rope[i].pos.x), i32(rope[i].pos.y), 10, rl.RED)
+				rl.DrawCircle(i32(rope[i].pos.x), i32(rope[i].pos.y), 10, PLAYER_COLOR)
 			}
 		}
 
 		rl.DrawFPS(10, 10)
 
 		if pause && (framesCounter / 30) % 2 != 0 {
-			rl.DrawText("PAUSED", 350, 200, 30, rl.GRAY)
+			rl.DrawText("PAUSED", 350, 200, 30, FG_COLOR)
 		}
 
 		rl.EndDrawing()
