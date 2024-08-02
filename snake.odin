@@ -7,7 +7,7 @@ SCREEN_HEIGHT :: 450
 PLAYER_SPEED :: 7
 PLAYER_LERP_FACTOR :: 6
 TETHER_LERP_FACTOR :: 6
-FRICTION :: 0.80 // Friction factor to reduce velocity
+FRICTION :: 0.90 // Friction factor to reduce velocity
 BG_COLOR :: rl.BLACK
 FG_COLOR :: rl.WHITE
 PLAYER_COLOR :: rl.WHITE
@@ -35,6 +35,22 @@ constrain_segment :: proc(segment: ^RopeSegment, anchor: rl.Vector2, rest_length
 	}
 }
 
+constrain_rope :: proc(rope: []RopeSegment, rest_length: f32) {
+	for i in 1 ..= len(rope) - 2 {
+		vec2prev := rope[i].pos - rope[i - 1].pos
+		vec2next := rope[i + 1].pos - rope[i].pos
+		dist2prev := rl.Vector2Length(vec2prev)
+		dist2next := rl.Vector2Length(vec2next)
+		if dist2prev > rest_length {
+			vec2prev = rl.Vector2Normalize(vec2prev) * rest_length
+		}
+		if dist2next > rest_length {
+			vec2next = rl.Vector2Normalize(vec2next) * rest_length
+		}
+		rope[i].pos = (rope[i - 1].pos + vec2prev + rope[i + 1].pos - vec2next) / 2
+	}
+}
+
 main :: proc() {
 	rl.SetConfigFlags(rl.ConfigFlags{.MSAA_4X_HINT})
 	rl.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "raylib [shapes] example - bouncing ball with rope")
@@ -46,7 +62,7 @@ main :: proc() {
 	player_targ := rl.Vector2{f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)}
 	tether_pos := rl.Vector2{0, 0}
 
-	rope_length :: 15
+	rope_length :: 10
 	anchor := rl.Vector2{f32(rl.GetScreenWidth() / 2), 50}
 	rest_length := 6
 	rope := make([]RopeSegment, rope_length)
@@ -87,15 +103,7 @@ main :: proc() {
 			}
 			rope[0].pos = ball_pos
 
-			// Constrain rope segments
-			for i in 1 ..= rope_length - 1 {
-				constrain_segment(&rope[i], rope[i - 1].pos, f32(rest_length))
-				constrain_segment(
-					&rope[rope_length - i - 1],
-					rope[rope_length - i].pos,
-					f32(rest_length),
-				)
-			}
+			constrain_rope(rope, f32(rest_length))
 
 			// Handle mouse interaction
 			mouse_pos := rl.GetMousePosition()
