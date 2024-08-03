@@ -19,19 +19,15 @@ ROPE_MAX_DIST :: 70
 EXTENDED_ROPE_MAX_DIST :: 300
 ENEMY_RADIUS :: 10
 ENEMY_COLOR :: rl.RED
+ENEMY_SPEED :: 0.5
 
-RopeSegment :: struct {
+PhysicsObject :: struct {
 	pos:      rl.Vector2,
 	prev_pos: rl.Vector2,
 }
 
-Enemy :: struct {
-	pos:      rl.Vector2,
-	prev_pos: rl.Vector2,
-}
 
-
-verlet_integrate :: proc(segment: ^RopeSegment, dt: f32) {
+verlet_integrate :: proc(segment: ^PhysicsObject, dt: f32) {
 	temp := segment.pos
 	velocity := segment.pos - segment.prev_pos
 	velocity = velocity * FRICTION
@@ -39,7 +35,7 @@ verlet_integrate :: proc(segment: ^RopeSegment, dt: f32) {
 	segment.prev_pos = temp
 }
 
-constrain_rope :: proc(rope: []RopeSegment, rest_length: f32) {
+constrain_rope :: proc(rope: []PhysicsObject, rest_length: f32) {
 	for i in 1 ..= len(rope) - 2 {
 		vec2prev := rope[i].pos - rope[i - 1].pos
 		vec2next := rope[i + 1].pos - rope[i].pos
@@ -55,13 +51,13 @@ constrain_rope :: proc(rope: []RopeSegment, rest_length: f32) {
 	}
 }
 
-initialize_rope :: proc(rope: []RopeSegment, length: int, anchor: rl.Vector2) {
+initialize_rope :: proc(rope: []PhysicsObject, length: int, anchor: rl.Vector2) {
 	for i in 0 ..= length - 1 {
-		rope[i] = RopeSegment{anchor, anchor}
+		rope[i] = PhysicsObject{anchor, anchor}
 	}
 }
 
-update_rope :: proc(rope: []RopeSegment, ball_pos: rl.Vector2, rest_length: f32) {
+update_rope :: proc(rope: []PhysicsObject, ball_pos: rl.Vector2, rest_length: f32) {
 	for i in 0 ..= len(rope) - 1 {
 		verlet_integrate(&rope[i], 1.0 / 60.0)
 	}
@@ -69,7 +65,11 @@ update_rope :: proc(rope: []RopeSegment, ball_pos: rl.Vector2, rest_length: f32)
 	constrain_rope(rope, rest_length)
 }
 
-handle_input :: proc(player_targ: ^rl.Vector2, isClicking: ^bool, enemies: ^[dynamic]Enemy) {
+handle_input :: proc(
+	player_targ: ^rl.Vector2,
+	isClicking: ^bool,
+	enemies: ^[dynamic]PhysicsObject,
+) {
 	direction := rl.Vector2{0, 0}
 	if rl.IsKeyDown(.W) {direction.y -= 1}
 	if rl.IsKeyDown(.S) {direction.y += 1}
@@ -115,19 +115,28 @@ update_tether_position :: proc(
 	}
 }
 
-spawn_enemy :: proc(spawn_pos: rl.Vector2, enemies: ^[dynamic]Enemy) {
-	append(enemies, Enemy{pos = spawn_pos})
+spawn_enemy :: proc(spawn_pos: rl.Vector2, enemies: ^[dynamic]PhysicsObject) {
+	append(enemies, PhysicsObject{pos = spawn_pos, prev_pos = spawn_pos})
+}
+
+update_enemies :: proc(enemies: ^[dynamic]PhysicsObject, player_pos: rl.Vector2) {
+	for &enemy in enemies {
+		// Calculate direction towards the player
+		direction := rl.Vector2Normalize(player_pos - enemy.pos)
+		enemy.pos += direction * ENEMY_SPEED // Adjust speed as necessary
+		verlet_integrate(&enemy, 1.0 / 60.0)
+	}
 }
 
 
 draw_scene :: proc(
 	ball_pos: rl.Vector2,
 	ball_rad: f32,
-	rope: []RopeSegment,
+	rope: []PhysicsObject,
 	rope_length: int,
 	pause: bool,
 	framesCounter: int,
-	enemies: [dynamic]Enemy,
+	enemies: [dynamic]PhysicsObject,
 ) {
 	rl.BeginDrawing()
 	rl.ClearBackground(BG_COLOR)
@@ -170,10 +179,10 @@ main :: proc() {
 
 	anchor := rl.Vector2{f32(rl.GetScreenWidth() / 2), 50}
 	rest_length := REST_LENGTH
-	rope := make([]RopeSegment, rope_length)
+	rope := make([]PhysicsObject, rope_length)
 	initialize_rope(rope, rope_length, anchor)
 
-	enemies := make([dynamic]Enemy, 0)
+	enemies := make([dynamic]PhysicsObject, 0)
 
 	pause := true
 	framesCounter := 0
@@ -195,6 +204,7 @@ main :: proc() {
 			update_ball_position(&ball_pos, &player_targ)
 			update_rope(rope, ball_pos, f32(rest_length))
 			update_tether_position(&ball_pos, &tether_pos, &isClicking, max_dist)
+			update_enemies(&enemies, ball_pos) // Update enemies to move towards the player
 			rope[rope_length - 1].pos +=
 				(tether_pos - rope[rope_length - 1].pos) / TETHER_LERP_FACTOR
 		} else {
