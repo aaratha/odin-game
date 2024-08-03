@@ -6,13 +6,17 @@ SCREEN_WIDTH :: 800
 SCREEN_HEIGHT :: 450
 PLAYER_SPEED :: 7
 PLAYER_LERP_FACTOR :: 6
-TETHER_LERP_FACTOR :: 2
+TETHER_LERP_FACTOR :: 6
 FRICTION :: 0.8
 BG_COLOR :: rl.BLACK
 FG_COLOR :: rl.WHITE
 PLAYER_COLOR :: rl.WHITE
 PLAYER_RADIUS :: 15
-REST_ROPE_LENGTH :: 0.4
+ROPE_LENGTH :: 15
+REST_LENGTH :: 1
+EXTENDED_REST_LENGTH :: 15
+ROPE_MAX_DIST :: 70
+EXTENDED_ROPE_MAX_DIST :: 300
 
 RopeSegment :: struct {
 	pos:      rl.Vector2,
@@ -83,16 +87,17 @@ update_ball_position :: proc(ball_pos, player_targ: ^rl.Vector2) {
 	ball_pos.y += (player_targ.y - ball_pos.y) / PLAYER_LERP_FACTOR
 }
 
-update_tether_position :: proc(ball_pos, tether_pos: ^rl.Vector2, isClicking: ^bool) {
-	limit := 70
+update_tether_position :: proc(
+	ball_pos, tether_pos: ^rl.Vector2,
+	isClicking: ^bool,
+	max_dist: int,
+) {
 	mouse_pos := rl.GetMousePosition()
 	to_mouse := mouse_pos - ball_pos^
 	distance := rl.Vector2Length(to_mouse)
 
-	if isClicking^ {limit = 2000000}
-
-	if distance > f32(limit) {
-		rope_end := ball_pos^ + rl.Vector2Normalize(to_mouse) * 70
+	if distance > f32(max_dist) {
+		rope_end := ball_pos^ + rl.Vector2Normalize(to_mouse) * f32(max_dist)
 		tether_pos^ = rope_end
 	} else {
 		tether_pos^ = mouse_pos
@@ -115,7 +120,7 @@ draw_scene :: proc(
 	for i in 0 ..= rope_length - 2 {
 		rl.DrawLineEx(rope[i].pos, rope[i + 1].pos, 3, PLAYER_COLOR)
 		if i == rope_length - 2 {
-			rl.DrawCircle(i32(rope[i].pos.x), i32(rope[i].pos.y), 10, PLAYER_COLOR)
+			rl.DrawCircle(i32(rope[i + 1].pos.x), i32(rope[i + 1].pos.y), 10, PLAYER_COLOR)
 		}
 	}
 
@@ -138,11 +143,12 @@ main :: proc() {
 	player_targ := rl.Vector2{f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)}
 	tether_pos := rl.Vector2{}
 	isClicking := false
+	max_dist := ROPE_MAX_DIST
 
-	rope_length :: 15
+	rope_length :: ROPE_LENGTH
 
 	anchor := rl.Vector2{f32(rl.GetScreenWidth() / 2), 50}
-	rest_length := REST_ROPE_LENGTH
+	rest_length := REST_LENGTH
 	rope := make([]RopeSegment, rope_length)
 	initialize_rope(rope, rope_length, anchor)
 
@@ -156,14 +162,16 @@ main :: proc() {
 		}
 		if !pause {
 			if isClicking {
-				rest_length = 20
+				rest_length = EXTENDED_REST_LENGTH
+				max_dist = EXTENDED_ROPE_MAX_DIST
 			} else {
-				rest_length = REST_ROPE_LENGTH
+				rest_length = REST_LENGTH
+				max_dist = ROPE_MAX_DIST
 			}
 			handle_input(&player_targ, &isClicking)
 			update_ball_position(&ball_pos, &player_targ)
 			update_rope(rope, ball_pos, f32(rest_length))
-			update_tether_position(&ball_pos, &tether_pos, &isClicking)
+			update_tether_position(&ball_pos, &tether_pos, &isClicking, max_dist)
 			rope[rope_length - 1].pos +=
 				(tether_pos - rope[rope_length - 1].pos) / TETHER_LERP_FACTOR
 		} else {
