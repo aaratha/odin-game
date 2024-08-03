@@ -20,6 +20,7 @@ EXTENDED_ROPE_MAX_DIST :: 300
 ENEMY_RADIUS :: 10
 ENEMY_COLOR :: rl.RED
 ENEMY_SPEED :: 0.5
+TETHER_RADIUS :: 10
 
 PhysicsObject :: struct {
 	pos:      rl.Vector2,
@@ -128,6 +129,72 @@ update_enemies :: proc(enemies: ^[dynamic]PhysicsObject, player_pos: rl.Vector2)
 	}
 }
 
+solve_collisions :: proc(
+	ball_pos: ^rl.Vector2,
+	ball_rad: int,
+	rope: []PhysicsObject,
+	tether_rad: int,
+	enemies: ^[dynamic]PhysicsObject,
+	enemy_rad: int,
+) {
+	// Ball vs Enemies
+	for i := 0; i < len(enemies); i += 1 {
+		dir := rl.Vector2Subtract(ball_pos^, enemies[i].pos)
+		distance := rl.Vector2Length(dir)
+		min_dist := f32(ball_rad + enemy_rad)
+
+		if distance < min_dist {
+			normal := rl.Vector2Normalize(dir)
+			depth := min_dist - distance
+			ball_pos^ = rl.Vector2Add(ball_pos^, rl.Vector2Scale(normal, depth * 0.5))
+			enemies[i].pos = rl.Vector2Subtract(
+				enemies[i].pos,
+				rl.Vector2Scale(normal, depth * 0.5),
+			)
+		}
+	}
+
+	// Rope segments vs Enemies
+	for i := 0; i < len(rope); i += 1 {
+		for j := 0; j < len(enemies); j += 1 {
+			dir := rl.Vector2Subtract(rope[i].pos, enemies[j].pos)
+			distance := rl.Vector2Length(dir)
+			min_dist := f32(tether_rad + enemy_rad)
+
+			if distance < min_dist {
+				normal := rl.Vector2Normalize(dir)
+				depth := min_dist - distance
+				rope[i].pos = rl.Vector2Add(rope[i].pos, rl.Vector2Scale(normal, depth * 0.5))
+				enemies[j].pos = rl.Vector2Subtract(
+					enemies[j].pos,
+					rl.Vector2Scale(normal, depth * 0.5),
+				)
+			}
+		}
+	}
+
+	// Enemies vs Enemies
+	for i := 0; i < len(enemies) - 1; i += 1 {
+		for j := i + 1; j < len(enemies); j += 1 {
+			dir := rl.Vector2Subtract(enemies[i].pos, enemies[j].pos)
+			distance := rl.Vector2Length(dir)
+			min_dist := f32(enemy_rad * 2)
+
+			if distance < min_dist {
+				normal := rl.Vector2Normalize(dir)
+				depth := min_dist - distance
+				enemies[i].pos = rl.Vector2Add(
+					enemies[i].pos,
+					rl.Vector2Scale(normal, depth * 0.5),
+				)
+				enemies[j].pos = rl.Vector2Subtract(
+					enemies[j].pos,
+					rl.Vector2Scale(normal, depth * 0.5),
+				)
+			}
+		}
+	}
+}
 
 draw_scene :: proc(
 	ball_pos: rl.Vector2,
@@ -146,7 +213,12 @@ draw_scene :: proc(
 	for i in 0 ..= rope_length - 2 {
 		rl.DrawLineEx(rope[i].pos, rope[i + 1].pos, 3, PLAYER_COLOR)
 		if i == rope_length - 2 {
-			rl.DrawCircle(i32(rope[i + 1].pos.x), i32(rope[i + 1].pos.y), 10, PLAYER_COLOR)
+			rl.DrawCircle(
+				i32(rope[i + 1].pos.x),
+				i32(rope[i + 1].pos.y),
+				TETHER_RADIUS,
+				PLAYER_COLOR,
+			)
 		}
 	}
 
@@ -205,6 +277,7 @@ main :: proc() {
 			update_rope(rope, ball_pos, f32(rest_length))
 			update_tether_position(&ball_pos, &tether_pos, &isClicking, max_dist)
 			update_enemies(&enemies, ball_pos) // Update enemies to move towards the player
+			solve_collisions(&ball_pos, PLAYER_RADIUS, rope, TETHER_RADIUS, &enemies, ENEMY_RADIUS)
 			rope[rope_length - 1].pos +=
 				(tether_pos - rope[rope_length - 1].pos) / TETHER_LERP_FACTOR
 		} else {
