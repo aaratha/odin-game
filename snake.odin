@@ -17,11 +17,19 @@ REST_LENGTH :: 1
 EXTENDED_REST_LENGTH :: 15
 ROPE_MAX_DIST :: 70
 EXTENDED_ROPE_MAX_DIST :: 300
+ENEMY_RADIUS :: 10
+ENEMY_COLOR :: rl.RED
 
 RopeSegment :: struct {
 	pos:      rl.Vector2,
 	prev_pos: rl.Vector2,
 }
+
+Enemy :: struct {
+	pos:      rl.Vector2,
+	prev_pos: rl.Vector2,
+}
+
 
 verlet_integrate :: proc(segment: ^RopeSegment, dt: f32) {
 	temp := segment.pos
@@ -61,7 +69,7 @@ update_rope :: proc(rope: []RopeSegment, ball_pos: rl.Vector2, rest_length: f32)
 	constrain_rope(rope, rest_length)
 }
 
-handle_input :: proc(player_targ: ^rl.Vector2, isClicking: ^bool) {
+handle_input :: proc(player_targ: ^rl.Vector2, isClicking: ^bool, enemies: ^[dynamic]Enemy) {
 	direction := rl.Vector2{0, 0}
 	if rl.IsKeyDown(.W) {direction.y -= 1}
 	if rl.IsKeyDown(.S) {direction.y += 1}
@@ -71,6 +79,9 @@ handle_input :: proc(player_targ: ^rl.Vector2, isClicking: ^bool) {
 		isClicking^ = true
 	} else {
 		isClicking^ = false
+	}
+	if rl.IsMouseButtonPressed(rl.MouseButton.RIGHT) {
+		spawn_enemy(rl.GetMousePosition(), enemies)
 	}
 
 	if direction.x != 0 || direction.y != 0 {
@@ -104,6 +115,11 @@ update_tether_position :: proc(
 	}
 }
 
+spawn_enemy :: proc(spawn_pos: rl.Vector2, enemies: ^[dynamic]Enemy) {
+	append(enemies, Enemy{pos = spawn_pos})
+}
+
+
 draw_scene :: proc(
 	ball_pos: rl.Vector2,
 	ball_rad: f32,
@@ -111,6 +127,7 @@ draw_scene :: proc(
 	rope_length: int,
 	pause: bool,
 	framesCounter: int,
+	enemies: [dynamic]Enemy,
 ) {
 	rl.BeginDrawing()
 	rl.ClearBackground(BG_COLOR)
@@ -122,6 +139,10 @@ draw_scene :: proc(
 		if i == rope_length - 2 {
 			rl.DrawCircle(i32(rope[i + 1].pos.x), i32(rope[i + 1].pos.y), 10, PLAYER_COLOR)
 		}
+	}
+
+	for enemy in enemies {
+		rl.DrawCircle(i32(enemy.pos.x), i32(enemy.pos.y), ENEMY_RADIUS, ENEMY_COLOR)
 	}
 
 	rl.DrawFPS(10, 10)
@@ -152,6 +173,8 @@ main :: proc() {
 	rope := make([]RopeSegment, rope_length)
 	initialize_rope(rope, rope_length, anchor)
 
+	enemies := make([dynamic]Enemy, 0)
+
 	pause := true
 	framesCounter := 0
 	rl.SetTargetFPS(60)
@@ -168,7 +191,7 @@ main :: proc() {
 				rest_length = REST_LENGTH
 				max_dist = ROPE_MAX_DIST
 			}
-			handle_input(&player_targ, &isClicking)
+			handle_input(&player_targ, &isClicking, &enemies)
 			update_ball_position(&ball_pos, &player_targ)
 			update_rope(rope, ball_pos, f32(rest_length))
 			update_tether_position(&ball_pos, &tether_pos, &isClicking, max_dist)
@@ -178,6 +201,6 @@ main :: proc() {
 			framesCounter += 1
 		}
 
-		draw_scene(ball_pos, ball_rad, rope, rope_length, pause, framesCounter)
+		draw_scene(ball_pos, ball_rad, rope, rope_length, pause, framesCounter, enemies)
 	}
 }
