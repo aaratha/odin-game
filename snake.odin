@@ -142,7 +142,6 @@ solve_collisions :: proc(
 		dir := ball_pos^ - enemies[i].pos
 		distance := rl.Vector2Length(dir)
 		min_dist := f32(ball_rad + enemy_rad)
-
 		if distance < min_dist {
 			normal := rl.Vector2Normalize(dir)
 			depth := min_dist - distance
