@@ -139,36 +139,31 @@ solve_collisions :: proc(
 ) {
 	// Ball vs Enemies
 	for i := 0; i < len(enemies); i += 1 {
-		dir := rl.Vector2Subtract(ball_pos^, enemies[i].pos)
+		dir := ball_pos^ - enemies[i].pos
 		distance := rl.Vector2Length(dir)
 		min_dist := f32(ball_rad + enemy_rad)
 
 		if distance < min_dist {
 			normal := rl.Vector2Normalize(dir)
 			depth := min_dist - distance
-			ball_pos^ = rl.Vector2Add(ball_pos^, rl.Vector2Scale(normal, depth * 0.5))
-			enemies[i].pos = rl.Vector2Subtract(
-				enemies[i].pos,
-				rl.Vector2Scale(normal, depth * 0.5),
-			)
+			ball_pos^ = ball_pos^ + (normal * depth * 0.5)
+			enemies[i].pos = enemies[i].pos - (normal * depth * 0.5)
 		}
 	}
 
 	// Rope segments vs Enemies
 	for i := 0; i < len(rope); i += 1 {
 		for j := 0; j < len(enemies); j += 1 {
-			dir := rl.Vector2Subtract(rope[i].pos, enemies[j].pos)
+			dir := rope[i].pos - enemies[j].pos
 			distance := rl.Vector2Length(dir)
 			min_dist := f32(tether_rad + enemy_rad)
 
 			if distance < min_dist {
 				normal := rl.Vector2Normalize(dir)
 				depth := min_dist - distance
-				rope[i].pos = rl.Vector2Add(rope[i].pos, rl.Vector2Scale(normal, depth * 0.5))
-				enemies[j].pos = rl.Vector2Subtract(
-					enemies[j].pos,
-					rl.Vector2Scale(normal, depth * 0.5),
-				)
+				rope[i].pos = rope[i].pos + (normal * depth * 0.5)
+				enemies[j].pos = enemies[j].pos - (normal * depth * 0.5)
+
 			}
 		}
 	}
@@ -176,21 +171,15 @@ solve_collisions :: proc(
 	// Enemies vs Enemies
 	for i := 0; i < len(enemies) - 1; i += 1 {
 		for j := i + 1; j < len(enemies); j += 1 {
-			dir := rl.Vector2Subtract(enemies[i].pos, enemies[j].pos)
+			dir := enemies[i].pos - enemies[j].pos
 			distance := rl.Vector2Length(dir)
 			min_dist := f32(enemy_rad * 2)
 
 			if distance < min_dist {
 				normal := rl.Vector2Normalize(dir)
 				depth := min_dist - distance
-				enemies[i].pos = rl.Vector2Add(
-					enemies[i].pos,
-					rl.Vector2Scale(normal, depth * 0.5),
-				)
-				enemies[j].pos = rl.Vector2Subtract(
-					enemies[j].pos,
-					rl.Vector2Scale(normal, depth * 0.5),
-				)
+				enemies[i].pos = enemies[i].pos + (normal * depth * 0.5)
+				enemies[j].pos = enemies[j].pos - (normal * depth * 0.5)
 			}
 		}
 	}
