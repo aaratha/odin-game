@@ -12,6 +12,7 @@ BG_COLOR :: rl.BLACK
 FG_COLOR :: rl.WHITE
 PLAYER_COLOR :: rl.WHITE
 PLAYER_RADIUS :: 15
+REST_ROPE_LENGTH :: 0.4
 
 RopeSegment :: struct {
 	pos:      rl.Vector2,
@@ -24,15 +25,6 @@ verlet_integrate :: proc(segment: ^RopeSegment, dt: f32) {
 	velocity = velocity * FRICTION
 	segment.pos = segment.pos + velocity
 	segment.prev_pos = temp
-}
-
-constrain_segment :: proc(segment: ^RopeSegment, anchor: rl.Vector2, rest_length: f32) {
-	direction := segment.pos - anchor
-	distance := rl.Vector2Length(direction)
-	if distance > rest_length {
-		direction = direction * (rest_length / distance)
-		segment.pos = anchor + direction
-	}
 }
 
 constrain_rope :: proc(rope: []RopeSegment, rest_length: f32) {
@@ -65,12 +57,17 @@ update_rope :: proc(rope: []RopeSegment, ball_pos: rl.Vector2, rest_length: f32)
 	constrain_rope(rope, rest_length)
 }
 
-handle_input :: proc(player_targ: ^rl.Vector2) {
+handle_input :: proc(player_targ: ^rl.Vector2, isClicking: ^bool) {
 	direction := rl.Vector2{0, 0}
 	if rl.IsKeyDown(.W) {direction.y -= 1}
 	if rl.IsKeyDown(.S) {direction.y += 1}
 	if rl.IsKeyDown(.D) {direction.x += 1}
 	if rl.IsKeyDown(.A) {direction.x -= 1}
+	if rl.IsMouseButtonDown(rl.MouseButton.LEFT) {
+		isClicking^ = true
+	} else {
+		isClicking^ = false
+	}
 
 	if direction.x != 0 || direction.y != 0 {
 		length := rl.Vector2Length(direction)
@@ -86,12 +83,15 @@ update_ball_position :: proc(ball_pos, player_targ: ^rl.Vector2) {
 	ball_pos.y += (player_targ.y - ball_pos.y) / PLAYER_LERP_FACTOR
 }
 
-update_tether_position :: proc(ball_pos, tether_pos: ^rl.Vector2) {
+update_tether_position :: proc(ball_pos, tether_pos: ^rl.Vector2, isClicking: ^bool) {
+	limit := 70
 	mouse_pos := rl.GetMousePosition()
 	to_mouse := mouse_pos - ball_pos^
 	distance := rl.Vector2Length(to_mouse)
 
-	if distance > 70 {
+	if isClicking^ {limit = 2000000}
+
+	if distance > f32(limit) {
 		rope_end := ball_pos^ + rl.Vector2Normalize(to_mouse) * 70
 		tether_pos^ = rope_end
 	} else {
@@ -137,10 +137,12 @@ main :: proc() {
 	ball_rad := f32(PLAYER_RADIUS)
 	player_targ := rl.Vector2{f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)}
 	tether_pos := rl.Vector2{}
+	isClicking := false
 
-	rope_length :: 9
+	rope_length :: 15
+
 	anchor := rl.Vector2{f32(rl.GetScreenWidth() / 2), 50}
-	rest_length := 6
+	rest_length := REST_ROPE_LENGTH
 	rope := make([]RopeSegment, rope_length)
 	initialize_rope(rope, rope_length, anchor)
 
@@ -153,10 +155,15 @@ main :: proc() {
 			pause = !pause
 		}
 		if !pause {
-			handle_input(&player_targ)
+			if isClicking {
+				rest_length = 20
+			} else {
+				rest_length = REST_ROPE_LENGTH
+			}
+			handle_input(&player_targ, &isClicking)
 			update_ball_position(&ball_pos, &player_targ)
 			update_rope(rope, ball_pos, f32(rest_length))
-			update_tether_position(&ball_pos, &tether_pos)
+			update_tether_position(&ball_pos, &tether_pos, &isClicking)
 			rope[rope_length - 1].pos +=
 				(tether_pos - rope[rope_length - 1].pos) / TETHER_LERP_FACTOR
 		} else {
