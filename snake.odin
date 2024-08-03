@@ -6,11 +6,12 @@ SCREEN_WIDTH :: 800
 SCREEN_HEIGHT :: 450
 PLAYER_SPEED :: 7
 PLAYER_LERP_FACTOR :: 6
-TETHER_LERP_FACTOR :: 6
-FRICTION :: 0.90
+TETHER_LERP_FACTOR :: 2
+FRICTION :: 0.8
 BG_COLOR :: rl.BLACK
 FG_COLOR :: rl.WHITE
 PLAYER_COLOR :: rl.WHITE
+PLAYER_RADIUS :: 15
 
 RopeSegment :: struct {
 	pos:      rl.Vector2,
@@ -129,15 +130,15 @@ draw_scene :: proc(
 
 main :: proc() {
 	rl.SetConfigFlags(rl.ConfigFlags{.MSAA_4X_HINT})
-	rl.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "raylib [shapes] example - bouncing ball with rope")
+	rl.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "ball and chain")
 	defer rl.CloseWindow()
 
 	ball_pos := rl.Vector2{f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)}
-	ball_rad := f32(15)
+	ball_rad := f32(PLAYER_RADIUS)
 	player_targ := rl.Vector2{f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)}
-	tether_pos := rl.Vector2{0, 0}
+	tether_pos := rl.Vector2{}
 
-	rope_length :: 10
+	rope_length :: 9
 	anchor := rl.Vector2{f32(rl.GetScreenWidth() / 2), 50}
 	rest_length := 6
 	rope := make([]RopeSegment, rope_length)
