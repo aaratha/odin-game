@@ -1,17 +1,20 @@
 package main
 
+import "core:fmt"
+import math "core:math/linalg"
 import rl "vendor:raylib"
+
 
 SCREEN_WIDTH :: 800
 SCREEN_HEIGHT :: 450
 PLAYER_SPEED :: 7
 PLAYER_LERP_FACTOR :: 6
 TETHER_LERP_FACTOR :: 6
-FRICTION :: 0.8
+FRICTION :: 0.7
 BG_COLOR :: rl.BLACK
 FG_COLOR :: rl.WHITE
 PLAYER_COLOR :: rl.WHITE
-PLAYER_RADIUS :: 15
+PLAYER_RADIUS :: 12
 ROPE_LENGTH :: 15
 REST_LENGTH :: 1
 EXTENDED_REST_LENGTH :: 15
@@ -21,6 +24,7 @@ ENEMY_RADIUS :: 10
 ENEMY_COLOR :: rl.RED
 ENEMY_SPEED :: 0.5
 TETHER_RADIUS :: 10
+mat :: distinct matrix[2, 2]f32
 
 PhysicsObject :: struct {
 	pos:      rl.Vector2,
@@ -184,6 +188,58 @@ solve_collisions :: proc(
 	}
 }
 
+// Helper function to check if two line segments intersect
+line_intersect :: proc(p1, p2, p3, p4: rl.Vector2, EPSILON: f32) -> bool {
+	d := (p1.x - p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x - p4.x)
+	if math.abs(d) < EPSILON {
+		return false // Lines are parallel or coincident
+	}
+	t := ((p1.x - p3.x) * (p3.y - p4.y) - (p1.y - p3.y) * (p3.x - p4.x)) / d
+	u := -((p1.x - p2.x) * (p1.y - p3.y) - (p1.y - p2.y) * (p1.x - p3.x)) / d
+	if t > EPSILON && t < 1 - EPSILON && u > EPSILON && u < 1 - EPSILON {
+		return true // Intersection found
+	}
+	return false
+}
+
+isClosed :: proc(rope: []PhysicsObject) -> bool {
+	EPSILON :: 1e-5
+	ENDPOINT_OFFSET :: 0.01
+	for i in 0 ..< len(rope) {
+		for j in i + 2 ..< len(rope) - 1 {
+			if j == len(rope) - 1 && i == 0 {
+				continue // Skip checking the first and last segments
+			}
+			p1 := rope[i].pos
+			p2 := rope[i + 1].pos
+			p3 := rope[j].pos
+			p4 := rope[j + 1].pos
+			// Adjust endpoints slightly inward
+			dir12 := rl.Vector2Normalize(p2 - p1)
+			dir34 := rl.Vector2Normalize(p4 - p3)
+			p1 = p1 + dir12 * ENDPOINT_OFFSET
+			p2 = p2 - dir12 * ENDPOINT_OFFSET
+			p3 = p3 + dir34 * ENDPOINT_OFFSET
+			p4 = p4 - dir34 * ENDPOINT_OFFSET
+			if line_intersect(p1, p2, p3, p4, EPSILON) {
+				return true // Intersection found, rope is closed
+			}
+		}
+	}
+	return false // No intersection found, rope is open
+}
+
+// kill_interior(rope, enemies: []PhysicsObject) {
+// 	for i in 0 ..< len(rope) {
+// 		for j in i + 2 ..< len(rope) - 1 {
+// 			if j == len(rope) - 1 && i == 0 {
+// 				continue // Skip checking the first and last segments
+// 			}
+// 			ray := 
+// 		}
+// 	}
+// }
+
 draw_scene :: proc(
 	ball_pos: rl.Vector2,
 	ball_rad: f32,
@@ -266,6 +322,7 @@ main :: proc() {
 			update_tether_position(&ball_pos, &tether_pos, &isClicking, max_dist)
 			update_enemies(&enemies, ball_pos) // Update enemies to move towards the player
 			solve_collisions(&ball_pos, PLAYER_RADIUS, rope, TETHER_RADIUS, &enemies, ENEMY_RADIUS)
+			fmt.println(isClosed(rope))
 			rope[rope_length - 1].pos +=
 				(tether_pos - rope[rope_length - 1].pos) / TETHER_LERP_FACTOR
 		} else {
