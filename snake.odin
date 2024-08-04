@@ -229,16 +229,51 @@ isClosed :: proc(rope: []PhysicsObject) -> bool {
 	return false // No intersection found, rope is open
 }
 
-// kill_interior(rope, enemies: []PhysicsObject) {
-// 	for i in 0 ..< len(rope) {
-// 		for j in i + 2 ..< len(rope) - 1 {
-// 			if j == len(rope) - 1 && i == 0 {
-// 				continue // Skip checking the first and last segments
-// 			}
-// 			ray := 
-// 		}
-// 	}
-// }
+
+kill_interior :: proc(rope: []PhysicsObject, enemies: ^[dynamic]PhysicsObject) {
+	RAY_LENGTH :: 1000.0
+
+	if !isClosed(rope) {
+		return // Only proceed if the rope forms a closed loop
+	}
+
+	for enemy_idx := len(enemies^) - 1; enemy_idx >= 0; enemy_idx -= 1 {
+		enemy_pos := enemies[enemy_idx].pos
+		intersections := 0
+
+		// Cast a ray from the enemy in any fixed direction (e.g., to the right)
+		ray_end := rl.Vector2{enemy_pos.x + RAY_LENGTH, enemy_pos.y}
+
+		for i := 0; i < len(rope) - 1; i += 1 {
+			segment_start := rope[i].pos
+			segment_end := rope[i + 1].pos
+
+			if line_intersect(enemy_pos, ray_end, segment_start, segment_end, 1e-5) {
+				intersections += 1
+			}
+		}
+
+		// If the number of intersections is odd, the enemy is inside the loop
+		if intersections % 2 == 1 {
+			ordered_remove(enemies, enemy_idx)
+		}
+	}
+}
+
+// Helper function to remove an element from a dynamic array
+ordered_remove :: proc(arr: ^[dynamic]PhysicsObject, index: int) {
+	if index < 0 || index >= len(arr^) {
+		return
+	}
+
+	// Shift elements to fill the gap
+	for i := index; i < len(arr^) - 1; i += 1 {
+		arr^[i] = arr^[i + 1]
+	}
+
+	// Remove the last element
+	pop(arr)
+}
 
 draw_scene :: proc(
 	ball_pos: rl.Vector2,
@@ -322,7 +357,9 @@ main :: proc() {
 			update_tether_position(&ball_pos, &tether_pos, &isClicking, max_dist)
 			update_enemies(&enemies, ball_pos) // Update enemies to move towards the player
 			solve_collisions(&ball_pos, PLAYER_RADIUS, rope, TETHER_RADIUS, &enemies, ENEMY_RADIUS)
-			fmt.println(isClosed(rope))
+			if isClosed(rope) {
+				kill_interior(rope, &enemies)
+			}
 			rope[rope_length - 1].pos +=
 				(tether_pos - rope[rope_length - 1].pos) / TETHER_LERP_FACTOR
 		} else {
