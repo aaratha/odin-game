@@ -313,6 +313,7 @@ ordered_remove :: proc(arr: ^[dynamic]PhysicsObject, index: int) {
 }
 
 draw_scene :: proc(
+	camera: rl.Camera2D,
 	ball_pos: rl.Vector2,
 	ball_rad: f32,
 	rope: []PhysicsObject,
@@ -323,6 +324,7 @@ draw_scene :: proc(
 	score: int,
 ) {
 	rl.BeginDrawing()
+	// rl.BeginMode2D(camera)
 	rl.ClearBackground(BG_COLOR)
 	rl.DrawCircleV(ball_pos, ball_rad, PLAYER_COLOR)
 	rl.DrawText("PRESS SPACE to PAUSE BALL MOVEMENT", 10, rl.GetScreenHeight() - 25, 20, FG_COLOR)
@@ -382,6 +384,8 @@ main :: proc() {
 
 	rl.SetTargetFPS(60)
 
+	camera: rl.Camera2D
+
 	spawnInterval := 1.0 // Spawn interval in seconds
 	lastSpawnTime := rl.GetTime()
 
@@ -419,6 +423,17 @@ main :: proc() {
 			framesCounter += 1
 		}
 
-		draw_scene(ball_pos, ball_rad, rope, rope_length, pause, framesCounter, enemies, score)
+		camera.target = ball_pos
+		draw_scene(
+			camera,
+			ball_pos,
+			ball_rad,
+			rope,
+			rope_length,
+			pause,
+			framesCounter,
+			enemies,
+			score,
+		)
 	}
 }
