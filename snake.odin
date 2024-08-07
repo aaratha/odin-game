@@ -2,14 +2,15 @@ package main
 
 import "core:fmt"
 import math "core:math/linalg"
+import time "core:time"
 import rl "vendor:raylib"
 
 
 SCREEN_WIDTH :: 800
 SCREEN_HEIGHT :: 450
 PLAYER_SPEED :: 7
-PLAYER_LERP_FACTOR :: 6
 TETHER_LERP_FACTOR :: 6
+PLAYER_LERP_FACTOR :: 6
 FRICTION :: 0.7
 BG_COLOR :: rl.BLACK
 FG_COLOR :: rl.WHITE
@@ -80,14 +81,8 @@ handle_input :: proc(
 	if rl.IsKeyDown(.S) {direction.y += 1}
 	if rl.IsKeyDown(.D) {direction.x += 1}
 	if rl.IsKeyDown(.A) {direction.x -= 1}
-	if rl.IsMouseButtonDown(rl.MouseButton.LEFT) {
-		isClicking^ = true
-	} else {
-		isClicking^ = false
-	}
-	if rl.IsMouseButtonPressed(rl.MouseButton.RIGHT) {
-		spawn_enemy(rl.GetMousePosition(), enemies)
-	}
+
+	isClicking^ = rl.IsMouseButtonDown(rl.MouseButton.LEFT)
 
 	if direction.x != 0 || direction.y != 0 {
 		length := rl.Vector2Length(direction)
@@ -120,7 +115,29 @@ update_tether_position :: proc(
 	}
 }
 
-spawn_enemy :: proc(spawn_pos: rl.Vector2, enemies: ^[dynamic]PhysicsObject) {
+random_outside_position :: proc() -> rl.Vector2 {
+	x_pos := rl.GetRandomValue(-ENEMY_RADIUS, SCREEN_WIDTH + ENEMY_RADIUS)
+	y_pos := rl.GetRandomValue(-ENEMY_RADIUS, SCREEN_HEIGHT + ENEMY_RADIUS)
+
+	// Ensure that the enemy is spawned outside the window
+	if x_pos > 0 && x_pos < SCREEN_WIDTH {
+		if rl.GetRandomValue(0, 1) == 0 {
+			y_pos = -ENEMY_RADIUS
+		} else {
+			y_pos = SCREEN_HEIGHT + ENEMY_RADIUS
+		}
+	} else {
+		if rl.GetRandomValue(0, 1) == 0 {
+			x_pos = -ENEMY_RADIUS
+		} else {
+			x_pos = SCREEN_WIDTH + ENEMY_RADIUS
+		}
+	}
+	return rl.Vector2{f32(x_pos), f32(y_pos)}
+}
+
+spawn_enemy :: proc(enemies: ^[dynamic]PhysicsObject) {
+	spawn_pos := random_outside_position()
 	append(enemies, PhysicsObject{pos = spawn_pos, prev_pos = spawn_pos})
 }
 
@@ -238,12 +255,17 @@ isClosed :: proc(rope: []PhysicsObject) -> (polygon: [dynamic]rl.Vector2) {
 }
 
 
-kill_interior :: proc(polygon: [dynamic]rl.Vector2, enemies: ^[dynamic]PhysicsObject) {
+kill_interior :: proc(
+	polygon: [dynamic]rl.Vector2,
+	enemies: ^[dynamic]PhysicsObject,
+	score: ^int,
+) {
 	RAY_LENGTH :: 1000.0
-	// Ensure that the polygon is drawn correctly
-	for i in 0 ..< len(polygon) - 1 {
-		rl.DrawLineEx(polygon[i], polygon[i + 1], 7, rl.RED)
-	}
+
+	// highlight polygon
+	// for i in 0 ..< len(polygon) - 1 {
+	// 	rl.DrawLineEx(polygon[i], polygon[i + 1], 7, rl.RED)
+	// }
 
 	for enemy_idx := len(enemies^) - 1; enemy_idx >= 0; enemy_idx -= 1 {
 		enemy_pos := enemies[enemy_idx].pos
@@ -270,6 +292,7 @@ kill_interior :: proc(polygon: [dynamic]rl.Vector2, enemies: ^[dynamic]PhysicsOb
 		// If the number of intersections is odd, the enemy is inside the loop
 		if intersections % 2 == 1 {
 			ordered_remove(enemies, enemy_idx)
+			score^ += 1
 		}
 	}
 }
@@ -297,6 +320,7 @@ draw_scene :: proc(
 	pause: bool,
 	framesCounter: int,
 	enemies: [dynamic]PhysicsObject,
+	score: int,
 ) {
 	rl.BeginDrawing()
 	rl.ClearBackground(BG_COLOR)
@@ -321,6 +345,9 @@ draw_scene :: proc(
 
 	rl.DrawFPS(10, 10)
 
+	rl.DrawText("SCORE: ", 650, 10, 20, rl.GREEN)
+	score_str := fmt.tprintf("%d", score)
+	rl.DrawText(cstring(raw_data(score_str)), 730, 10, 20, rl.GREEN)
 	if pause && (framesCounter / 30) % 2 != 0 {
 		rl.DrawText("PAUSED", 350, 200, 30, FG_COLOR)
 	}
@@ -348,10 +375,15 @@ main :: proc() {
 	initialize_rope(rope, rope_length, anchor)
 
 	enemies := make([dynamic]PhysicsObject, 0)
+	score := 0
 
 	pause := true
 	framesCounter := 0
+
 	rl.SetTargetFPS(60)
+
+	spawnInterval := 1.0 // Spawn interval in seconds
+	lastSpawnTime := rl.GetTime()
 
 	for !rl.WindowShouldClose() {
 		if rl.IsKeyPressed(rl.KeyboardKey.SPACE) {
@@ -373,14 +405,20 @@ main :: proc() {
 			solve_collisions(&ball_pos, PLAYER_RADIUS, rope, TETHER_RADIUS, &enemies, ENEMY_RADIUS)
 			if isClosed(rope) != nil {
 				polygon := isClosed(rope)
-				kill_interior(polygon, &enemies)
+				kill_interior(polygon, &enemies, &score)
 			}
 			rope[rope_length - 1].pos +=
 				(tether_pos - rope[rope_length - 1].pos) / TETHER_LERP_FACTOR
+
+			// Spawn enemies periodically
+			if rl.GetTime() - lastSpawnTime > spawnInterval {
+				spawn_enemy(&enemies)
+				lastSpawnTime = rl.GetTime()
+			}
 		} else {
 			framesCounter += 1
 		}
 
-		draw_scene(ball_pos, ball_rad, rope, rope_length, pause, framesCounter, enemies)
+		draw_scene(ball_pos, ball_rad, rope, rope_length, pause, framesCounter, enemies, score)
 	}
 }
