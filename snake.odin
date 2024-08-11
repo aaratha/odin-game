@@ -5,7 +5,6 @@ import math "core:math/linalg"
 import time "core:time"
 import rl "vendor:raylib"
 
-
 SCREEN_WIDTH :: 800
 SCREEN_HEIGHT :: 450
 PLAYER_SPEED :: 7
@@ -99,20 +98,21 @@ update_ball_position :: proc(ball_pos, player_targ: ^rl.Vector2) {
 }
 
 update_tether_position :: proc(
-	ball_pos, tether_pos: ^rl.Vector2,
-	isClicking: ^bool,
-	max_dist: int,
+    ball_pos, tether_pos: ^rl.Vector2,
+    isClicking: ^bool,
+    max_dist: int,
+    camera: rl.Camera2D,
 ) {
-	mouse_pos := rl.GetMousePosition()
-	to_mouse := mouse_pos - ball_pos^
-	distance := rl.Vector2Length(to_mouse)
+    mouse_pos := rl.GetMousePosition()
+    world_mouse_position := rl.GetScreenToWorld2D(mouse_pos, camera)
+    to_mouse := world_mouse_position - ball_pos^
+    distance := rl.Vector2Length(to_mouse)
 
-	if distance > f32(max_dist) {
-		rope_end := ball_pos^ + rl.Vector2Normalize(to_mouse) * f32(max_dist)
-		tether_pos^ = rope_end
-	} else {
-		tether_pos^ = mouse_pos
-	}
+    if distance > f32(max_dist) {
+        tether_pos^ = ball_pos^ + rl.Vector2Normalize(to_mouse) * f32(max_dist)
+    } else {
+        tether_pos^ = world_mouse_position
+    }
 }
 
 random_outside_position :: proc() -> rl.Vector2 {
@@ -254,7 +254,6 @@ isClosed :: proc(rope: []PhysicsObject) -> (polygon: [dynamic]rl.Vector2) {
 	return nil // No intersection found, rope is open
 }
 
-
 kill_interior :: proc(
 	polygon: [dynamic]rl.Vector2,
 	enemies: ^[dynamic]PhysicsObject,
@@ -324,7 +323,7 @@ draw_scene :: proc(
 	score: int,
 ) {
 	rl.BeginDrawing()
-	// rl.BeginMode2D(camera)
+	rl.BeginMode2D(camera)
 	rl.ClearBackground(BG_COLOR)
 	rl.DrawCircleV(ball_pos, ball_rad, PLAYER_COLOR)
 	rl.DrawText("PRESS SPACE to PAUSE BALL MOVEMENT", 10, rl.GetScreenHeight() - 25, 20, FG_COLOR)
@@ -404,7 +403,7 @@ main :: proc() {
 			handle_input(&player_targ, &isClicking, &enemies)
 			update_ball_position(&ball_pos, &player_targ)
 			update_rope(rope, ball_pos, f32(rest_length))
-			update_tether_position(&ball_pos, &tether_pos, &isClicking, max_dist)
+			update_tether_position(&ball_pos, &tether_pos, &isClicking, max_dist, camera)
 			update_enemies(&enemies, ball_pos) // Update enemies to move towards the player
 			solve_collisions(&ball_pos, PLAYER_RADIUS, rope, TETHER_RADIUS, &enemies, ENEMY_RADIUS)
 			if isClosed(rope) != nil {
@@ -424,6 +423,10 @@ main :: proc() {
 		}
 
 		camera.target = ball_pos
+		camera.offset = rl.Vector2{f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)}
+		camera.zoom = 1.0 // Adjust this value for zoom in or out
+		camera.rotation = 0.0 // No rotation
+
 		draw_scene(
 			camera,
 			ball_pos,
