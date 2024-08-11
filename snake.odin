@@ -10,6 +10,7 @@ SCREEN_HEIGHT :: 450
 PLAYER_SPEED :: 7
 TETHER_LERP_FACTOR :: 6
 PLAYER_LERP_FACTOR :: 6
+CAMERA_LERP_FACTOR :: 6
 FRICTION :: 0.7
 BG_COLOR :: rl.BLACK
 FG_COLOR :: rl.WHITE
@@ -326,7 +327,6 @@ draw_scene :: proc(
 	rl.BeginMode2D(camera)
 	rl.ClearBackground(BG_COLOR)
 	rl.DrawCircleV(ball_pos, ball_rad, PLAYER_COLOR)
-	rl.DrawText("PRESS SPACE to PAUSE BALL MOVEMENT", 10, rl.GetScreenHeight() - 25, 20, FG_COLOR)
 
 	for i in 0 ..= rope_length - 2 {
 		rl.DrawLineEx(rope[i].pos, rope[i + 1].pos, 3, PLAYER_COLOR)
@@ -344,16 +344,28 @@ draw_scene :: proc(
 		rl.DrawCircle(i32(enemy.pos.x), i32(enemy.pos.y), ENEMY_RADIUS, ENEMY_COLOR)
 	}
 
-	rl.DrawFPS(10, 10)
 
-	rl.DrawText("SCORE: ", 650, 10, 20, rl.GREEN)
-	score_str := fmt.tprintf("%d", score)
-	rl.DrawText(cstring(raw_data(score_str)), 730, 10, 20, rl.GREEN)
-	if pause && (framesCounter / 30) % 2 != 0 {
-		rl.DrawText("PAUSED", 350, 200, 30, FG_COLOR)
-	}
+    // Calculate corner positions relative to the camera view
+    screen_width := f32(rl.GetScreenWidth())
+    screen_height := f32(rl.GetScreenHeight())
+    top_left := camera.target - camera.offset / camera.zoom
+    bottom_left := rl.Vector2{top_left.x, top_left.y + screen_height / camera.zoom}
+    top_right := rl.Vector2{top_left.x + screen_width / camera.zoom, top_left.y}
 
-	rl.EndDrawing()
+    // Draw UI elements
+    rl.DrawText("PRESS SPACE to PAUSE BALL MOVEMENT", i32(bottom_left.x) + 10, i32(bottom_left.y) - 25, 20, FG_COLOR)
+    rl.DrawText("FPS: ", i32(top_left.x) + 10, i32(top_left.y) + 10, 20, FG_COLOR)
+    fps_str := fmt.tprintf("%d", rl.GetFPS())
+    rl.DrawText(cstring(raw_data(fps_str)), i32(top_left.x) + 60, i32(top_left.y) + 10, 20, FG_COLOR)
+    rl.DrawText("SCORE: ", i32(top_right.x) - 150, i32(top_right.y) + 10, 20, rl.GREEN)
+    score_str := fmt.tprintf("%d", score)
+    rl.DrawText(cstring(raw_data(score_str)), i32(top_right.x) - 70, i32(top_right.y) + 10, 20, rl.GREEN)
+
+    if pause && (framesCounter / 30) % 2 != 0 {
+        pause_text_pos := camera.target
+        rl.DrawText("PAUSED", i32(pause_text_pos.x) - 50, i32(pause_text_pos.y), 30, FG_COLOR)
+    }
+    rl.EndDrawing()
 }
 
 main :: proc() {
@@ -384,6 +396,7 @@ main :: proc() {
 	rl.SetTargetFPS(60)
 
 	camera: rl.Camera2D
+	cameraTarget := rl.Vector2{0,0}
 
 	spawnInterval := 1.0 // Spawn interval in seconds
 	lastSpawnTime := rl.GetTime()
@@ -418,11 +431,12 @@ main :: proc() {
 				spawn_enemy(&enemies)
 				lastSpawnTime = rl.GetTime()
 			}
+			cameraTarget += (ball_pos - cameraTarget) / CAMERA_LERP_FACTOR
 		} else {
 			framesCounter += 1
 		}
 
-		camera.target = ball_pos
+		camera.target = cameraTarget
 		camera.offset = rl.Vector2{f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)}
 		camera.zoom = 1.0 // Adjust this value for zoom in or out
 		camera.rotation = 0.0 // No rotation
