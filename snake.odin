@@ -116,29 +116,41 @@ update_tether_position :: proc(
     }
 }
 
-random_outside_position :: proc() -> rl.Vector2 {
-	x_pos := rl.GetRandomValue(-ENEMY_RADIUS, SCREEN_WIDTH + ENEMY_RADIUS)
-	y_pos := rl.GetRandomValue(-ENEMY_RADIUS, SCREEN_HEIGHT + ENEMY_RADIUS)
+random_outside_position :: proc(camera: rl.Camera2D) -> rl.Vector2 {
+    // Calculate the camera's view boundaries
+    camera_left := camera.target.x - camera.offset.x / camera.zoom
+    camera_right := camera.target.x + (f32(SCREEN_WIDTH) - camera.offset.x) / camera.zoom
+    camera_top := camera.target.y - camera.offset.y / camera.zoom
+    camera_bottom := camera.target.y + (f32(SCREEN_HEIGHT) - camera.offset.y) / camera.zoom
 
-	// Ensure that the enemy is spawned outside the window
-	if x_pos > 0 && x_pos < SCREEN_WIDTH {
-		if rl.GetRandomValue(0, 1) == 0 {
-			y_pos = -ENEMY_RADIUS
-		} else {
-			y_pos = SCREEN_HEIGHT + ENEMY_RADIUS
-		}
-	} else {
-		if rl.GetRandomValue(0, 1) == 0 {
-			x_pos = -ENEMY_RADIUS
-		} else {
-			x_pos = SCREEN_WIDTH + ENEMY_RADIUS
-		}
-	}
-	return rl.Vector2{f32(x_pos), f32(y_pos)}
+    // Add a buffer to ensure enemies spawn well outside the view
+    buffer := f32(100)
+
+    // Generate a random position outside the camera's view
+    x_pos, y_pos: f32
+    if rl.GetRandomValue(0, 1) == 0 {
+        // Spawn on left or right side
+        x_pos = rl.GetRandomValue(0, 1) == 0 ? camera_left - ENEMY_RADIUS - buffer :
+            camera_right + ENEMY_RADIUS + buffer
+        y_pos = f32(rl.GetRandomValue(
+            i32(camera_top - ENEMY_RADIUS),
+            i32(camera_bottom + ENEMY_RADIUS)
+        ))
+    } else {
+        // Spawn on top or bottom side
+        x_pos = f32(rl.GetRandomValue(
+            i32(camera_left - ENEMY_RADIUS),
+            i32(camera_right + ENEMY_RADIUS)
+        ))
+        y_pos = rl.GetRandomValue(0, 1) == 0 ? camera_top - ENEMY_RADIUS - buffer :
+            camera_bottom + ENEMY_RADIUS + buffer
+    }
+
+    return rl.Vector2{x_pos, y_pos}
 }
 
-spawn_enemy :: proc(enemies: ^[dynamic]PhysicsObject) {
-	spawn_pos := random_outside_position()
+spawn_enemy :: proc(enemies: ^[dynamic]PhysicsObject, camera: rl.Camera2D) {
+	spawn_pos := random_outside_position(camera)
 	append(enemies, PhysicsObject{pos = spawn_pos, prev_pos = spawn_pos})
 }
 
@@ -428,7 +440,7 @@ main :: proc() {
 
 			// Spawn enemies periodically
 			if rl.GetTime() - lastSpawnTime > spawnInterval {
-				spawn_enemy(&enemies)
+				spawn_enemy(&enemies, camera)
 				lastSpawnTime = rl.GetTime()
 			}
 			cameraTarget += (ball_pos - cameraTarget) / CAMERA_LERP_FACTOR
